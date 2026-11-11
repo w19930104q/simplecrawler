@@ -481,6 +481,22 @@ This is done both with regards to the robots.txt file, and `<meta>` tags
 that specify a `nofollow` value for robots. The latter only applies if
 the default [discoverResources](#Crawler+discoverResources) method is used, though.
 
+<a name="Crawler+concurrentRobotsTxt"></a>
+
+#### crawler.concurrentRobotsTxt : <code>Boolean</code>
+Controls whether robots.txt files are fetched concurrently with page
+requests. When enabled, a page whose origin's robots.txt is still being
+fetched waits for the rules, while pages from other origins can be
+fetched whenever there is spare concurrency — a slow robots.txt file
+never blocks crawling of unrelated origins. Origins are identified by
+protocol, host and effective port, and each origin's robots.txt is only
+fetched once. Robots.txt probes and page requests share the
+[maxConcurrency](#Crawler+maxConcurrency) limit, but queue items waiting for rules
+do not occupy a slot.
+
+This is disabled by default, in which case the original behaviour of
+fetching robots.txt files one at a time is preserved.
+
 <a name="Crawler+allowInitialDomainChange"></a>
 
 #### crawler.allowInitialDomainChange : <code>Boolean</code>
@@ -694,6 +710,29 @@ eg. a SOCKS client.
 Controls what HTTPS agent to use. This is useful if you want to configure
 eg. a SOCKS client.
 
+
+### Concurrent robots.txt fetching
+
+By default, simplecrawler retrieves robots.txt files one at a time and waits for the current origin's file before fetching any of its pages. On a crawl that spans several origins, one slow robots.txt file can therefore stall every other origin.
+
+Setting <code><a href="#Crawler+concurrentRobotsTxt">crawler.concurrentRobotsTxt</a></code> to `true` enables a concurrent mode in which:
+
+* Each origin is identified by protocol, host and effective port (defaulting to port 80 for `http` and 443 for `https`), and its robots.txt is only fetched once.
+* Pages whose origin's robots.txt is still being fetched wait for the rules instead of being fetched with stale or missing rules. Items that are waiting do not occupy a concurrency slot.
+* Pages on other origins are fetched as soon as there is spare capacity, so a slow robots.txt no longer blocks unrelated origins.
+* Robots.txt probes and page requests share the <code><a href="#Crawler+maxConcurrency">crawler.maxConcurrency</a></code> limit.
+* Robots.txt redirects are followed for at most five hops. Redirect loops and longer chains emit a single `robotstxterror` and the crawler falls back to its usual failure policy: the resource is fetched anyway.
+* Calling <code><a href="#Crawler+stop">crawler.stop</a></code> with `true` aborts robots.txt probes too. Late responses are ignored, and pages that were waiting for rules are crawled after the next call to <code><a href="#Crawler+start">crawler.start</a></code>.
+
+```js
+var crawler = new Crawler("http://www.example.com/");
+
+crawler.concurrentRobotsTxt = true;
+crawler.maxConcurrency = 5;
+crawler.start();
+```
+
+The mode is opt-in, so the original robots.txt behaviour is unchanged unless it is enabled.
 
 ## Fetch conditions
 

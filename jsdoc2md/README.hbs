@@ -151,6 +151,29 @@ simplecrawler is highly configurable and there's a long list of settings you can
 {{>docs}}
 {{/identifiers}}
 
+### Concurrent robots.txt fetching
+
+By default, simplecrawler retrieves robots.txt files one at a time and waits for the current origin's file before fetching any of its pages. On a crawl that spans several origins, one slow robots.txt file can therefore stall every other origin.
+
+Setting {{>link to="Crawler#concurrentRobotsTxt" html=true caption="crawler.concurrentRobotsTxt"}} to `true` enables a concurrent mode in which:
+
+* Each origin is identified by protocol, host and effective port (defaulting to port 80 for `http` and 443 for `https`), and its robots.txt is only fetched once.
+* Pages whose origin's robots.txt is still being fetched wait for the rules instead of being fetched with stale or missing rules. Items that are waiting do not occupy a concurrency slot.
+* Pages on other origins are fetched as soon as there is spare capacity, so a slow robots.txt no longer blocks unrelated origins.
+* Robots.txt probes and page requests share the {{>link to="Crawler#maxConcurrency" html=true caption="crawler.maxConcurrency"}} limit.
+* Robots.txt redirects are followed for at most five hops. Redirect loops and longer chains emit a single `robotstxterror` and the crawler falls back to its usual failure policy: the resource is fetched anyway.
+* Calling {{>link to="Crawler#stop" html=true caption="crawler.stop"}} with `true` aborts robots.txt probes too. Late responses are ignored, and pages that were waiting for rules are crawled after the next call to {{>link to="Crawler#start" html=true caption="crawler.start"}}.
+
+```js
+var crawler = new Crawler("http://www.example.com/");
+
+crawler.concurrentRobotsTxt = true;
+crawler.maxConcurrency = 5;
+crawler.start();
+```
+
+The mode is opt-in, so the original robots.txt behaviour is unchanged unless it is enabled.
+
 ## Fetch conditions
 
 simplecrawler has an concept called fetch conditions that offers a flexible API for filtering discovered resources before they're put in the queue. A fetch condition is a function that takes a queue item candidate and evaluates (synchronously or asynchronously) whether it should be added to the queue or not. *Please note: with the next major release, all fetch conditions will be asynchronous.*
